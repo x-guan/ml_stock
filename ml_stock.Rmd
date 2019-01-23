@@ -1,0 +1,158 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+Analyze stock data using machine learning approaches
+=============================================================
+Predict Direction (up or down)
+
+Xin Guan (github.com/x-guan)
+
+
+Data
+-------------
+```{r}
+rm(list=ls())
+setwd("/Users/Guan/Xin/R/Github/ml_stock")
+
+set.seed(443)
+stock <- read.csv("stock.csv", header=T)
+dim(stock)
+head(stock)
+
+# summary
+summary(stock)
+
+# check linearity
+pairs(stock[,c(9,1:4)], col=stock$Direction)
+pairs(stock[,c(9,5:8)], col=stock$Direction)
+
+# select training set
+train <- stock$Year<2005
+```
+
+GLM
+---------------
+```{r}
+# fit the glm model
+fit_glm <- glm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, data=stock, 
+               family=binomial, subset=train)
+fit_glm
+
+# predict
+prob_glm <- predict(fit_glm, newdata=stock[!train,], type="response")
+prob_glm[1:5]
+pred_glm <- ifelse(prob_glm>0.5,"Up","Down")
+head(pred_glm)
+
+# resutls
+table(pred_glm, stock$Direction[!train])
+mean(pred_glm==stock$Direction[!train])
+```
+
+Linear discriminant analysis
+---------------
+```{r}
+library(MASS)
+
+# fit a lda model
+fit_lda <- lda(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, data=stock, subset=train)
+fit_lda
+plot(fit_lda)
+
+# predict
+pred_lda <- predict(fit_lda, stock[!train,])
+pred_lda <- as.data.frame(pred_lda)
+head(pred_lda)
+
+# results
+table(pred_lda$class, stock$Direction[!train])
+mean(pred_lda$class==stock$Direction[!train])
+```
+
+K-nearest neighbors
+---------------
+```{r}
+library(class)
+
+# fit the knn model
+Xlag <- with(stock, cbind(Lag1, Lag2, Lag3, Lag4, Lag5, Volume))
+perd_knn <- knn(Xlag[train,], Xlag[!train,], stock$Direction[train], k=1)   # k=1 ???
+
+# results
+table(perd_knn, stock$Direction[!train])
+mean(perd_knn==stock$Direction[!train])
+```
+
+Random forest
+---------------
+```{r}
+library(randomForest)
+
+
+
+# fit a random forest model
+fit_forest <- randomForest(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, 
+                           data=stock, importance=T, subset=train, mtry=4, ntree=1000)
+
+# select variables ???
+importance(fit_forest)
+
+# predict
+pred_forest <- predict(fit_forest, stock[!train,])
+
+# results
+table(pred_forest, stock$Direction[!train])
+mean(pred_forest==stock$Direction[!train])
+
+```
+
+Boosting
+---------------
+```{r}
+library(gbm)
+
+# fit a boosting model
+fit_boost <- gbm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, data=stock[train,],
+                 distribution="multinomial", n.trees=1000, shrinkage=0.01, interaction.depth=4)
+fit_boost
+
+# select variables
+summary(fit_boost)
+
+# predict
+prob_boost <- predict(fit_boost, stock[!train,], n.trees=1000, type="response")
+prob_boost[1:5]
+pred_boost <- ifelse(prob_boost[,2,]>0.5, "Up", "Down")
+head(pred_boost)
+
+# results
+table(pred_boost, stock$Direction[!train])
+mean(pred_boost==stock$Direction[!train])
+```
+
+SVM
+---------------
+```{r}
+library(e1071)
+
+# fit the svm model
+fit_svm <- svm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, data=stock, 
+               subset=train, kernel="linear", cost=10, scale=F)   # linear
+# fit_svm <- svm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, data=stock, 
+#                subset=train, kernel="radial", cost=10, scale=F)   # non-linear
+
+fit_svm
+plot(fit_svm, stock[train,], Lag1~Volume)
+
+# predict
+pred_svm <- predict(fit_svm, stock[!train,])
+
+# results
+table(pred_svm, stock$Direction[!train])
+mean(pred_svm==stock$Direction[!train])
+```
+
+
+
